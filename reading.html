@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="author" content="">
+  <meta charset="utf-8">
+  <title>Reading and writing data</title>
+  <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700|Source+Code+Pro:400,700'
+        rel='stylesheet' type='text/css'>
+  <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/custom.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/hk-pyg.css" rel="stylesheet" type="text/css" media="all">
+  <script src="js/jquery-2.0.3.min.js" type="text/javascript"></script>
+  <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  <script src="js/list.min.js" type="text/javascript"></script>
+</head>
+<body>
+  <div id="topbar" style="z-index: 3">
+    <div class="container">
+      <div class="row">
+        <ul>
+          <li><div id="pkgname">Bio 0.0.0-</div></li>
+          <li><a href="#">Code</a></li>
+          <li><a href="#/issues">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" style="z-index: auto">
+    <div class="row">
+      <div class="col-sm-7">
+      <div id="body-content">
+      <h1 id="title">Reading and writing data</h1>
+<p>Bio.jl has a unified interface for reading and writing files in a variety of formats. To initialize a parser for a particular format, the <code>open</code> method is extended with a file format type parameter &#40;currently supported formats types are <code>BED</code>, <code>FASTQ</code>, and <code>FASTA</code>&#41;.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">open&#123;T &lt;: FileFormat&#125;&#40;filename::String, ::Type&#123;T&#125;; memory_map::Bool&#61;false&#41;
+open&#123;T &lt;: FileFormat&#125;&#40;source::IO, ::Type&#123;T&#125;&#41;
+open&#123;T &lt;: FileFormat&#125;&#40;data::Vector&#123;UInt8&#125;, ::Type&#123;T&#125;&#41;</code></pre>
+<h1 id="parsing-by-iteration">Parsing by iteration</h1>
+<p>Parsers in Bio.jl all read and return entries one at a time. The most convenient way to do this by iteration.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">stream &#61; open&#40;&quot;input.bed&quot;, BED&#41;
+for entry in stream
+    # perform some operation on entry
+end</code></pre>
+<h1 id="in-place-parsing">In-place parsing</h1>
+<p>Iterating through entries in a file is convenient, but for each entry in the file, the parser must allocate , and ultimately the garbage collector must spend time to deallocate it. For performance critical applications, a separate lower level parsing interface can be used that avoid unnecessary allocation by overwriting one entry. For files with a large number of small entries, this can greatly speed up reading.</p>
+<p>Instead of looping over a parser stream <code>read&#33;</code> is called with a preallocated entry. It will then attempt to read one entry, returning <code>true</code> if successful and <code>false</code> if the end of the input has been reached.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">stream &#61; open&#40;&quot;input.bed&quot;, BED&#41;
+entry &#61; BEDInterval&#40;&#41;
+while read&#33;&#40;stream, entry&#41;
+    # perform some operation on entry
+end</code></pre>
+<p>Some care is necessary when using this interface. Because <code>entry</code> is completely overwritten on each iteration, one must manually copy any field from <code>entry</code> that should be preserved. For example, if we wish to save the <code>seqname</code> field from <code>entry</code> when parsing BED, we must call <code>copy&#40;entry.seqname&#41;</code>.</p>
+<p>Empty entry types that correspond to the file format be found using <code>eltype</code>, making it easy to allocate an empty entry for any parser stream.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">entry &#61; eltype&#40;stream&#41;&#40;&#41;</code></pre>
+
+      <hr>
+      </div>
+      </div>
+
+      <div class="col-sm-offset-8" style="z-index: 2">
+        <div id="table-of-contents">
+          <div id="table-of-contents-content">
+            <input class="search" placeholder="SEARCH" />
+            <ul class="toc list nav"><li>
+    <a class="toc-item" href="index.html">Introduction</a>
+</li>
+<li>
+    <a class="toc-item toc-current-doc" href="reading.html">Reading and writing data</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#parsing-by-iteration">Parsing by iteration</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#in-place-parsing">In-place parsing</a>
+</li>
+<li>
+    <hr><div class="toc-part">Seq</div>
+</li>
+<li>
+    <a class="toc-item" href="seq.html">Nucleotide and amino acid sequences</a>
+</li>
+<li>
+    <hr><div class="toc-part">Intervals</div>
+</li>
+<li>
+    <a class="toc-item" href="intervals.html">Genomic interval manipulation</a>
+</li>
+<li>
+    <hr><div class="toc-part">Contributing</div>
+</li>
+<li>
+    <a class="toc-item" href="parsing.html">Implementing parsers</a>
+</li>
+</ul>
+
+            <script>
+                var toclist = new List("table-of-contents",
+                                       {valueNames: ["toc-item"]})
+
+                $("body").scrollspy({target: "#table-of-contents"});
+
+                $("#table-of-contents li").on("activate.bs.scrollspy",
+                    function(event) {
+                        $("#table-of-contents ul").find("a").css({"font-weight": "normal"});
+                        $(this).children("a").css({"font-weight": "bolder"});
+                    });
+            </script>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <footer class="col-sm-8">
+    <p class="muted">Last modified by  on . Generated with
+    <a href="https://github.com/dcjones/Judo.jl">Judo</a>.</p>
+  </footer>
+
+  </div>
+</body>
+</html>
+

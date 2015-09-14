@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="author" content="">
+  <meta charset="utf-8">
+  <title>Genomic interval manipulation</title>
+  <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700|Source+Code+Pro:400,700'
+        rel='stylesheet' type='text/css'>
+  <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/custom.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/hk-pyg.css" rel="stylesheet" type="text/css" media="all">
+  <script src="js/jquery-2.0.3.min.js" type="text/javascript"></script>
+  <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  <script src="js/list.min.js" type="text/javascript"></script>
+</head>
+<body>
+  <div id="topbar" style="z-index: 3">
+    <div class="container">
+      <div class="row">
+        <ul>
+          <li><div id="pkgname">Bio 0.0.0-</div></li>
+          <li><a href="#">Code</a></li>
+          <li><a href="#/issues">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" style="z-index: auto">
+    <div class="row">
+      <div class="col-sm-7">
+      <div id="body-content">
+      <h1 id="title">Genomic interval manipulation</h1>
+<p>The <code>Intervals</code> module consists of tools for working efficiently with genomic intervals.</p>
+<h1 id="interval-types">Interval types</h1>
+<p>Intervals in Bio.jl are consistent with ranges in Julia: <em>1-based and end-inclusive</em>. When data is read from formats with different representations &#40;i.e. 0-based and/or end-exclusive&#41; they are always converted automatically. Similarly when writing data. You should not have to reason about off-by-one errors due to format differences while using functionality provided in Bio.jl.</p>
+<p>The <code>Interval</code> type is defined as</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">type Interval&#123;T&#125; &lt;: AbstractInterval&#123;Int64&#125;
+    seqname::ASCIIString
+    first::Int64
+    last::Int64
+    strand::Strand
+    metadata::T
+end</code></pre>
+<p>Similarly to the <code>ReqRecord</code> type in the <code>Seq</code> module, <code>Interval</code> is parameterized on metadata type, which lets it efficiently and precisely be specialized to represent intervals from a variety of formats.</p>
+<p>Strand is represented by the <code>Strand</code> type which can take four possible values:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">STRAND_NA   # strand is unknown or inapplicable
+STRAND_POS  # positive strand
+STRAND_NEG  # negative strand
+STRAND_BOTH # non-strand-specific feature</code></pre>
+<h1 id="collections-of-intervals">Collections of intervals</h1>
+<p>Collections of intervals are represented using the <code>IntervalCollection</code> type, which is a general purpose indexed container for intervals. It supports fast intersection operations as well as insertion, deletion, and sorted iteration.</p>
+<p>Interval collections can be initialized by inserting elements one by one using <code>push&#33;</code>.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># The type parameter &#40;Nothing here&#41; indicates the interval metadata type.
+incol &#61; IntervalCollection&#123;Nothing&#125;&#40;&#41;
+
+for i in 1:100:10000
+    push&#33;&#40;incol, Interval&#40;&quot;chr1&quot;, i, i &#43; 99, STRAND_POS, nothing&#41;&#41;
+end</code></pre>
+<p>Incrementally building an interval collection like this works, but <code>IntervalCollection</code> also has a bulk insertion constructor that is able to build the indexed data structure extremely efficiently from an array of intervals.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">incol &#61; IntervalCollection&#40;&#91;Interval&#40;&quot;chr1&quot;, i, i &#43; 99, STRAND_POS, nothing&#41; for i in 1:100:10000&#93;&#41;</code></pre>
+<p>Bulding <code>IntervalCollections</code> in one shot like this should be preferred when it&#39;s convenient or speed in an issue.</p>
+<h1 id="intersection">Intersection</h1>
+<p>There are number of <code>intersect</code> function in the Intervals module. They follow two patterns: interval versus collection queries which return an iterator over intervals in the collection that intersect the query, and collection versus collection queries which iterate over all pairs of intersecting intervals.</p>
+<h2 id="intersect">intersect</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">intersect&#123;S,T&#125;&#40;a::IntervalCollection&#123;S&#125;,b::IntervalCollection&#123;T&#125;&#41;</code></pre>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">intersect&#123;T&#125;&#40;a::IntervalCollection&#123;T&#125;,b::Interval&#41;</code></pre>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">intersect&#40;a::IntervalCollection,b::IntervalStreamOrArray&#41;</code></pre>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">intersect&#123;SS &lt;: IntervalStreamOrArray,TS &lt;: IntervalStreamOrArray&#125;&#40;a::SS,b::TS,seqname_isless::Function&#61;isless&#41;</code></pre>
+<h1 id="interval-streams">Interval streams</h1>
+<p>Intervals need not necessarily stored in an indexed data structure for efficient intersection to be practical. Two collections of intervals need only be both sorted to compute all intersecting pairs. This is particularly useful in genomics where datasets are sometimes so large that loading them entirely into memory is not practical.</p>
+<p>The Intervals module is able to intersect any two iterators that yield intervals in sorted order, which we refer to as &quot;interval streams&quot;. An <code>IntervalCollection</code> is also a interval stream, but so is a sorted array of intervals, and parsers over interval file formats. This allows for a very general notion of intersection.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">for &#40;x, y&#41; in intersect&#40;open&#40;&quot;x_features.bed&quot;, BED&#41;, open&#40;&quot;y_features.bed&quot;, BED&#41;&#41;
+    println&#40;&quot;Intersection found between &quot;, x, &quot; and &quot;, y&#41;
+end</code></pre>
+<p>An exception will be thrown if an interval in encountered out of order while processing an interval stream. Ordering of intervals has one complication: there is not necessarily a standardized way to order sequence names. By default in Bio.jl intervals are sorted using a special <code>alphanum_isless</code> comparison function that compares numbers numerically if they exist in string, so that names like <code>chr1, chr2, chr10</code> end up in their natural order.</p>
+<p>The <code>intersect</code> function takes as an optional parameter an <code>isless</code> function to use to compare sequence names to account for arbitrary sequence name orderings.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># assume lexigraphic ordering for sequence names
+for &#40;x, y&#41; in intersect&#40;xs, ys, isless&#41;
+    println&#40;&quot;Intersection found between &quot;, a, &quot; and &quot;, b&#41;
+end</code></pre>
+<p>A special sort of intersection can also be performed on a <code>IntervalStreams</code> against itself to produce &quot;coverage intervals&quot;.</p>
+<h2 id="coverage">coverage</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">coverage&#40;stream::Union&#40;IntervalStreamOrArray,IntervalTree&#41;,seqname_isless::Function&#61;isless&#41;</code></pre>
+<p>Compute the coverage of a collection of intervals.</p>
+<h3 id="arguments">Arguments</h3>
+<ul>
+<li><code>intervals</code>: any IntervalStream</li>
+</ul>
+<h3 id="returns">Returns</h3>
+<p>An IntervalCollection that contains run-length encoded coverage data.</p>
+<p>E.g. for intervals like</p>
+<pre><code class="language-julia">    &#91;------&#93;     &#91;------------&#93;
+       &#91;---------------&#93;</code></pre>
+<p>this function would return a new set of disjoint intervals with annotated coverage like:</p>
+<pre><code class="language-julia">    &#91;1&#93;&#91;-2-&#93;&#91;-1-&#93;&#91;--2--&#93;&#91;--1--&#93;</code></pre>
+
+      <hr>
+      </div>
+      </div>
+
+      <div class="col-sm-offset-8" style="z-index: 2">
+        <div id="table-of-contents">
+          <div id="table-of-contents-content">
+            <input class="search" placeholder="SEARCH" />
+            <ul class="toc list nav"><li>
+    <a class="toc-item" href="index.html">Introduction</a>
+</li>
+<li>
+    <a class="toc-item" href="reading.html">Reading and writing data</a>
+</li>
+<li>
+    <hr><div class="toc-part">Seq</div>
+</li>
+<li>
+    <a class="toc-item" href="seq.html">Nucleotide and amino acid sequences</a>
+</li>
+<li>
+    <hr><div class="toc-part">Intervals</div>
+</li>
+<li>
+    <a class="toc-item toc-current-doc" href="intervals.html">Genomic interval manipulation</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#interval-types">Interval types</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#collections-of-intervals">Collections of intervals</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#intersection">Intersection</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#intersect">intersect</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#interval-streams">Interval streams</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#coverage">coverage</a>
+</li>
+<li>
+    <hr><div class="toc-part">Contributing</div>
+</li>
+<li>
+    <a class="toc-item" href="parsing.html">Implementing parsers</a>
+</li>
+</ul>
+
+            <script>
+                var toclist = new List("table-of-contents",
+                                       {valueNames: ["toc-item"]})
+
+                $("body").scrollspy({target: "#table-of-contents"});
+
+                $("#table-of-contents li").on("activate.bs.scrollspy",
+                    function(event) {
+                        $("#table-of-contents ul").find("a").css({"font-weight": "normal"});
+                        $(this).children("a").css({"font-weight": "bolder"});
+                    });
+            </script>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <footer class="col-sm-8">
+    <p class="muted">Last modified by  on . Generated with
+    <a href="https://github.com/dcjones/Judo.jl">Judo</a>.</p>
+  </footer>
+
+  </div>
+</body>
+</html>
+

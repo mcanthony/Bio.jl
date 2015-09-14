@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="author" content="">
+  <meta charset="utf-8">
+  <title>Nucleotide and amino acid sequences</title>
+  <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700|Source+Code+Pro:400,700'
+        rel='stylesheet' type='text/css'>
+  <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/custom.css" rel="stylesheet" type="text/css" media="all">
+  <link href="css/hk-pyg.css" rel="stylesheet" type="text/css" media="all">
+  <script src="js/jquery-2.0.3.min.js" type="text/javascript"></script>
+  <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  <script src="js/list.min.js" type="text/javascript"></script>
+</head>
+<body>
+  <div id="topbar" style="z-index: 3">
+    <div class="container">
+      <div class="row">
+        <ul>
+          <li><div id="pkgname">Bio 0.0.0-</div></li>
+          <li><a href="#">Code</a></li>
+          <li><a href="#/issues">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" style="z-index: auto">
+    <div class="row">
+      <div class="col-sm-7">
+      <div id="body-content">
+      <h1 id="title">Nucleotide and amino acid sequences</h1>
+<pre><code class="language-&#123;.julia hide&#61;&quot;true&quot;&#125;">using Bio.Seq</code></pre>
+<p>The <code>Seq</code> module provides representations and tools for manipulating nucleotide and amino acid sequences. Sequences in Bio.jl are more strictly typed than in many other libraries. They are special purpose types rather than simply strings. Bio.jl currently provides three distinct sequence types: <code>DNASequence</code>, <code>RNASequence</code>, and <code>AminoAcidSequence</code>. Each is defined over a separate alphabet, represented by types <code>DNANucleotide</code>, <code>RNANucleotide</code>, and <code>AminoAcid</code>, respectively. Symbols from multiple alphabets can&#39;t be intermixed in one sequence type.</p>
+<p>Though this strictness sacrifices some convenience, it also means you can always rely on a <code>DNASequence</code> to store DNA and nothing but DNA, without having to check, or deal with lowercase versus uppercase and so on. Strict separation of sequence types also means we are free to choose the most efficient representation. DNA and RNA sequences are encoded using two bits per base making them extremely memory efficient, and also allowing us to speed up many common operations like nucleotide composition, reverse complement, and k-mer enumeration.</p>
+<p>Sequence are all able to represent missing or unobserved values using the special symbols <code>DNA_N</code>, <code>RNA_N</code>, and <code>AA_X</code>.</p>
+<h1 id="constructing-sequences-and-nucleotides">Constructing sequences and nucleotides</h1>
+<p>Nucleotide or amino acid symbols can be constructed by converting regular characters.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># These calls produce three different types each representing &quot;A&quot; in a different alphabet
+convert&#40;AminoAcid, &#39;A&#39;&#41;
+convert&#40;DNANucleotide, &#39;A&#39;&#41;
+convert&#40;RNANucleotide, &#39;A&#39;&#41;</code></pre>
+<p>There are also constants defined for each, such as <code>DNA_A</code>, <code>RNA_A</code>, and <code>AA_A</code>.</p>
+<p>Sequence types corresponding to these alphabets can be constructed a number of different ways. Most immediately, sequence literals can be constructed using the string macros <code>dna</code>, <code>rna</code>, and <code>aa</code>.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># String decorators are provided for common sequence types
+dna&quot;TACGTANNATC&quot;
+rna&quot;AUUUGNCCANU&quot;
+aa&quot;ARNDCQEGHILKMFPSTWYVX&quot;</code></pre>
+<p>Sequence can be constructed from strings or arrays of nucleotide or amino acid symbols using constructors or the <code>convert</code> function.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">DNASequence&#40;&quot;TTANGTAGACCG&quot;&#41;
+DNASequence&#40;&#91;DNA_T, DNA_T, DNA_A, DNA_N, DNA_C&#93;&#41;</code></pre>
+<p>Using <code>convert</code>, these operations are reversible: sequences can be converted to strings or arrays:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">convert&#40;String, dna&quot;TTANGTAGACCG&quot;&#41;
+#convert&#40;Vector&#123;DNANucleotide&#125;, dna&quot;TTANGTAGACCG&quot;&#41;</code></pre>
+<p>Sequences can also be concatenated into longer sequences</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">DNASequence&#40;dna&quot;ACGT&quot;, dna&quot;NNNN&quot;, dna&quot;TGCA&quot;&#41;</code></pre>
+<p>Despite being separate types, <code>DNASequence</code> and <code>RNASequence</code> can freely be converted between efficiently without copying the underlying data.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">convert&#40;RNASequence, dna&quot;TTANGTAGACCG&quot;&#41;</code></pre>
+<p>A translatable <code>RNASequence</code> can also be converted to an <code>AminoAcidSequence</code> using the <code>translate</code> function described below.</p>
+<h1 id="indexing-and-iteration">Indexing and iteration</h1>
+<p>Sequences for the most part behave like other string types. They can be indexed using integers or ranges:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">seq &#61; dna&quot;ACGTTTANAGTNNAGTACC&quot;
+seq&#91;5&#93;
+seq&#91;6:end&#93;</code></pre>
+<p>They also work as iterators over nucleotides or amino acids:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">for &#40;i, nt&#41; in enumerate&#40;seq&#41;
+    if nt &#61;&#61; DNA_N
+        println&#40;&quot;N in position &quot;, i&#41;
+    end
+end</code></pre>
+<h1 id="mutability">Mutability</h1>
+<p>Most sequences in Bio.jl are immutable, which means attempting to change nucleotides in the sequence will result in an error. The advantage of immutability is that subsequences don&#39;t have to make copies of the original data but can instead just point to different intervals in the same memory.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># initialize a random million nucleotide sequence
+large_sequence &#61; DNASequence&#40;rand&#40;&#91;DNA_A, DNA_C, DNA_T, DNA_G&#93;, 1000000&#41;&#41;
+
+# This subsequence requires very little additional memory, since it doesn&#39;t copy the underlying data.
+suffix &#61; large_sequence&#91;2:end&#93;</code></pre>
+<p>Immutable sequences have an obvious disadvantage: some algorithms are easier or more efficient to implement if a sequence can be altered or overwritten. For this reason we provide a mutable mode for sequences. Mutability can be turned on and off at any time by calling <code>mutable&#33;&#40;seq&#41;</code> and <code>immutable&#33;&#40;seq&#41;</code>, respectively.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># This is an error, because sequences are immutable by default
+seq &#61; dna&quot;ACGNACCTAGATAC&quot;
+seq&#91;1&#93; &#61; DNA_T
+
+# Switching the sequence into mutable mode allows this
+mutable&#33;&#40;seq&#41;
+seq&#91;1&#93; &#61; DNA_T</code></pre>
+<p>There are few subtleties to mode switching to be aware of if you&#39;re writing performance critical code. Switching a mutable sequence to immutable is always efficient; no data needs to be copied to do so. So is switching from immutable to mutable, but only if the sequence hasn&#39;t had any subsequences made, and isn&#39;t itself a subsequence, otherwise a complete copy of the data will be made.</p>
+<h1 id="operations-on-sequences">Operations on sequences</h1>
+<p>A number of common sequence operations on nucleotide sequences are provided in the Seq module.</p>
+<h2 id="reverse_complement">reverse_complement</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">reverse_complement&#40;seq::NucleotideSequence&#41;</code></pre>
+<p>Reversed complement of the nucleotide sequence <code>seq</code></p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">reverse_complement&#123;T,K&#125;&#40;x::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>Reversed complement of <code>kmer</code></p>
+<h2 id="reverse">reverse</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">reverse&#123;T&#125;&#40;seq::NucleotideSequence&#123;T&#125;&#41;</code></pre>
+<p>Reversed copy of the nucleotide sequence <code>seq</code></p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">reverse&#123;T,K&#125;&#40;x::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>Reversed copy of <code>kmer</code></p>
+<h2 id="complement">complement</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">complement&#40;seq::NucleotideSequence&#41;</code></pre>
+<p>The nucleotide complement of the sequence <code>seq</code></p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">complement&#123;T,K&#125;&#40;x::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>The Kmer complement of <code>kmer</code></p>
+<h2 id="repeat">repeat</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">repeat&#40;chunk::AminoAcidSequence,n::Integer&#41;</code></pre>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">repeat&#123;T &lt;: Nucleotide&#125;&#40;chunk::NucleotideSequence&#123;T&#125;,n::Integer&#41;</code></pre>
+<p>Construct a nucleotide sequence by repeating another sequence <code>n</code> times</p>
+<h2 id="mismatches">mismatches</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">mismatches&#123;T&#125;&#40;a::NucleotideSequence&#123;T&#125;,b::NucleotideSequence&#123;T&#125;,nmatches::Bool&#61;false&#41;</code></pre>
+<p>Return the number of mismatches between <code>a</code> and <code>b</code>.</p>
+<p>If <code>a</code> and <code>b</code> are of differing lengths, only the first <code>min&#40;length&#40;a&#41;, length&#40;b&#41;&#41;</code> nucleotides are compared.</p>
+<h3 id="arguments">Arguments</h3>
+<ul>
+<li><code>a</code>: first sequence to compare</li>
+<li><code>b</code>: second sequence to compare</li>
+<li><code>nmatches</code>: if true, N matches anything, if false, N matches only itself &#40;false&#41;</li>
+</ul>
+<h3 id="returns">Returns</h3>
+<p>The number of mismatches</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">mismatches&#123;T,K&#125;&#40;a::Kmer&#123;T,K&#125;,b::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>Return the number of mismatches between <code>x</code> and <code>y</code>.</p>
+<h3 id="arguments">Arguments</h3>
+<ul>
+<li><code>a</code>: first sequence to compare</li>
+<li><code>b</code>: second sequence to compare</li>
+</ul>
+<h3 id="returns">Returns</h3>
+<p>The number of mismatches</p>
+<h2 id="nucleotidecounts">NucleotideCounts</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">NucleotideCounts&#40;::Bio.Seq.Kmer&#123;T,K&#125;&#41;</code></pre>
+<p><code>NucleotideCounts&#40;seq::Kmer&#41;</code></p>
+<p>Constructs a NucleotideCounts object from a Kmer <code>seq</code>.</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">NucleotideCounts&#40;::Bio.Seq.NucleotideSequence&#123;T&#125;&#41;</code></pre>
+<p><code>NucleotideCounts&#40;seq::NucleotideSequence&#41;</code></p>
+<p>Constructs a NucleotideCounts object from a NucleotideSequence <code>seq</code>.</p>
+<h2 id="translate">translate</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">translate&#40;seq::RNASequence,code::GeneticCode&#61;standard_genetic_code,allow_ambiguous_codons::Bool&#61;false&#41;</code></pre>
+<p>Convert an <code>RNASequence</code> to an <code>AminoAcidSequence</code>.</p>
+<h3 id="arguments">Arguments</h3>
+<ul>
+<li><code>seq</code>: RNA sequence to translate.</li>
+<li><code>code</code>: Genetic code to use &#40;default is the standard genetic code&#41;.</li>
+<li><code>allow_ambiguous_codons</code>: True if ambiguous codons should be allowed and       translated to <code>AA_X</code>. If false, they will throw an error. &#40;default is true&#41;</li>
+</ul>
+<h3 id="returns">Returns</h3>
+<p>A translated <code>AminoAcidSequence</code></p>
+<p>The <code>Seq</code> module contains all NCBI defined genetic codes:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">standard_genetic_code,
+vertebrate_mitochondrial_genetic_code,
+yeast_mitochondrial_genetic_code,
+mold_mitochondrial_genetic_code,
+invertebrate_mitochondrial_genetic_code,
+ciliate_nuclear_genetic_code,
+echinoderm_mitochondrial_genetic_code,
+euplotid_nuclear_genetic_code,
+bacterial_plastid_genetic_code,
+alternative_yeast_nuclear_genetic_code,
+ascidian_mitochondrial_genetic_code,
+alternative_flatworm_mitochondrial_genetic_code,
+chlorophycean_mitochondrial_genetic_code,
+trematode_mitochondrial_genetic_code,
+scenedesmus_obliquus_mitochondrial_genetic_code,
+thraustochytrium_mitochondrial_genetic_code,
+pterobrachia_mitochondrial_genetic_code,
+candidate_division_sr1_genetic_code</code></pre>
+<p>In most cases, and by default, <code>standard_genetic_code</code> is used.</p>
+<h1 id="nucleotide-k-mers">Nucleotide K-mers</h1>
+<p>A common strategy to simplify the analysis of sequence data is to operate or short k-mers, for size fixed size <code>k</code>. These can be packed into machine integers allowing extremely efficient code. The Seq module has built in support for representing short sequences in 64-bit integers. Besides being fixed length, <code>Kmer</code> types, unlike other sequence types cannot contain <code>N</code> symbols.</p>
+<p>The <code>Kmer&#123;T, K&#125;</code> type parameterized on alphabet &#40;<code>T</code>, either <code>DNANucleotide</code>, or <code>RNANucleotide</code>&#41; and size <code>K</code>. A number of functions are provided for operating on <code>Kmers</code>.</p>
+<h2 id="each">each</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">each&#123;T,K&#125;&#40;t::Type&#123;Kmer&#123;T,K&#125;&#125;,seq::NucleotideSequence&#123;T&#125;,step::Integer&#61;1&#41;</code></pre>
+<p>Initialize an iterator over all k-mers in a sequence.</p>
+<p>Any k-mer containing an N will be skipped over.</p>
+<h3 id="arguments">Arguments</h3>
+<ul>
+<li><code>t</code>: Kmer type to enumerate.</li>
+<li><code>seq</code>: A NucleotideSequence</li>
+<li><code>step</code>: number of positions between iterated k-mers &#40;default: 1&#41;</li>
+</ul>
+<h3 id="returns">Returns</h3>
+<p>A EachKmerIterator constructed with these parameters</p>
+<h3 id="examples">Examples</h3>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;"># iterate over codons
+for x in each&#40;DNAKmer&#123;3&#125;, dna&quot;ATCCTANAGNTACT&quot;, 3&#41;
+    &#64;show x
+end</code></pre>
+<h2 id="kmercounts">KmerCounts</h2>
+<h2 id="canonical">canonical</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">canonical&#123;T,K&#125;&#40;x::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>Canonical k-mer of <code>x</code></p>
+<p>A canonical k-mer is the numerical lesser of a k-mer and its reverse complement. This is useful in hashing/counting k-mers in data that is not strand specific, and thus observing k-mer is equivalent to observing its reverse complement.</p>
+<h2 id="neighbors">neighbors</h2>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">neighbors&#123;T,K&#125;&#40;x::Kmer&#123;T,K&#125;&#41;</code></pre>
+<p>Iterate through k-mers neighboring <code>x</code> on a de Bruijn graph.</p>
+<h1 id="sequence-records">Sequence records</h1>
+<p>The <code>SeqRecord</code> type is used to represent a named sequence, optionally with accompanying metadata. It is defined as: sequence. It is as:</p>
+<pre><code class="language-&#123;.julia execute&#61;&quot;false&quot;&#125;">type SeqRecord&#123;S, T&#125;
+    name::String
+    seq::S
+    metadata::T
+end</code></pre>
+<p>The type of the <code>metadata</code> field depends on the source of the sequence record. For example, if a record is read from a FASTA file, metadata contains the description field. If from a FASTQ file, a quality scores assigned to base calls during sequencing.</p>
+
+      <hr>
+      </div>
+      </div>
+
+      <div class="col-sm-offset-8" style="z-index: 2">
+        <div id="table-of-contents">
+          <div id="table-of-contents-content">
+            <input class="search" placeholder="SEARCH" />
+            <ul class="toc list nav"><li>
+    <a class="toc-item" href="index.html">Introduction</a>
+</li>
+<li>
+    <a class="toc-item" href="reading.html">Reading and writing data</a>
+</li>
+<li>
+    <hr><div class="toc-part">Seq</div>
+</li>
+<li>
+    <a class="toc-item toc-current-doc" href="seq.html">Nucleotide and amino acid sequences</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#constructing-sequences-and-nucleotides">Constructing sequences and nucleotides</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#indexing-and-iteration">Indexing and iteration</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#mutability">Mutability</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#operations-on-sequences">Operations on sequences</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#reverse_complement">reverse_complement</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#reverse">reverse</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#complement">complement</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#repeat">repeat</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#mismatches">mismatches</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#nucleotidecounts">NucleotideCounts</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#translate">translate</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#nucleotide-k-mers">Nucleotide K-mers</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#each">each</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#kmercounts">KmerCounts</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#canonical">canonical</a>
+</li>
+<li>
+    <a style="margin-left: 1.0em" class="toc-item" href="#neighbors">neighbors</a>
+</li>
+<li>
+    <a style="margin-left: 0.5em" class="toc-item" href="#sequence-records">Sequence records</a>
+</li>
+<li>
+    <hr><div class="toc-part">Intervals</div>
+</li>
+<li>
+    <a class="toc-item" href="intervals.html">Genomic interval manipulation</a>
+</li>
+<li>
+    <hr><div class="toc-part">Contributing</div>
+</li>
+<li>
+    <a class="toc-item" href="parsing.html">Implementing parsers</a>
+</li>
+</ul>
+
+            <script>
+                var toclist = new List("table-of-contents",
+                                       {valueNames: ["toc-item"]})
+
+                $("body").scrollspy({target: "#table-of-contents"});
+
+                $("#table-of-contents li").on("activate.bs.scrollspy",
+                    function(event) {
+                        $("#table-of-contents ul").find("a").css({"font-weight": "normal"});
+                        $(this).children("a").css({"font-weight": "bolder"});
+                    });
+            </script>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <footer class="col-sm-8">
+    <p class="muted">Last modified by  on . Generated with
+    <a href="https://github.com/dcjones/Judo.jl">Judo</a>.</p>
+  </footer>
+
+  </div>
+</body>
+</html>
+
